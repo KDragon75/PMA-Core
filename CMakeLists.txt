@@ -53,6 +53,10 @@ add_library(pma_storage STATIC src/storage/storage.cpp)
 target_include_directories(pma_storage PUBLIC include PRIVATE third_party/sqlite third_party/sha256)
 target_link_libraries(pma_storage PUBLIC pma_project_options PRIVATE pma_sqlite pma_sha256)
 
+add_library(pma_graph STATIC src/application/graph.cpp)
+target_include_directories(pma_graph PUBLIC include)
+target_link_libraries(pma_graph PUBLIC pma_project_options pma_storage)
+
 find_package(nlohmann_json CONFIG REQUIRED)
 add_library(pma_service STATIC src/application/service.cpp src/transport/stdio.cpp)
 target_include_directories(pma_service PUBLIC include)
@@ -67,6 +71,8 @@ if(BUILD_TESTING)
   target_link_libraries(pma-smoke-test PRIVATE pma_project_options Catch2::Catch2WithMain)
   add_executable(pma-storage-test tests/storage/storage_test.cpp)
   target_link_libraries(pma-storage-test PRIVATE pma_storage Catch2::Catch2WithMain)
+  add_executable(pma-graph-test tests/graph/graph_test.cpp)
+  target_link_libraries(pma-graph-test PRIVATE pma_graph Catch2::Catch2WithMain)
   add_executable(pma-service-test tests/protocol/service_test.cpp)
   target_compile_definitions(
     pma-service-test PRIVATE PMA_PROTOCOL_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/protocol/pma-service/fixtures"
@@ -77,6 +83,7 @@ if(BUILD_TESTING)
   include(Catch)
   catch_discover_tests(pma-smoke-test)
   catch_discover_tests(pma-storage-test)
+  catch_discover_tests(pma-graph-test)
   catch_discover_tests(pma-service-test)
 
   find_program(NODE_EXECUTABLE node REQUIRED)

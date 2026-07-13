@@ -91,6 +91,13 @@ void Statement::bind(std::size_t index, std::int64_t value) {
   }
 }
 
+void Statement::bind(std::size_t index, double value) {
+  const int result = sqlite3_bind_double(impl_->statement, static_cast<int>(index), value);
+  if (result != SQLITE_OK) {
+    fail(sqlite3_db_handle(impl_->statement), result, "bind real");
+  }
+}
+
 void Statement::bind(std::size_t index, std::string_view value) {
   const int result = sqlite3_bind_text64(impl_->statement, static_cast<int>(index), value.data(),
                                          value.size(), SQLITE_TRANSIENT, SQLITE_UTF8);
@@ -135,6 +142,10 @@ void Statement::reset() {
 
 std::int64_t Statement::column_int64(std::size_t index) const {
   return sqlite3_column_int64(impl_->statement, static_cast<int>(index));
+}
+
+double Statement::column_double(std::size_t index) const {
+  return sqlite3_column_double(impl_->statement, static_cast<int>(index));
 }
 
 std::string Statement::column_text(std::size_t index) const {

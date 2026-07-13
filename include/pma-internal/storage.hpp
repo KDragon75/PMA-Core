@@ -32,12 +32,14 @@ public:
   Statement &operator=(const Statement &) = delete;
 
   void bind(std::size_t index, std::int64_t value);
+  void bind(std::size_t index, double value);
   void bind(std::size_t index, std::string_view value);
   void bind_null(std::size_t index);
   [[nodiscard]] bool step();
   void execute();
   void reset();
   [[nodiscard]] std::int64_t column_int64(std::size_t index) const;
+  [[nodiscard]] double column_double(std::size_t index) const;
   [[nodiscard]] std::string column_text(std::size_t index) const;
   [[nodiscard]] bool column_is_null(std::size_t index) const;
 
