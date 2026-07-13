@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  cpp-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        preset: [windows-msvc-debug, windows-msvc-release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lukka/run-vcpkg@v11
+      - run: cmake --preset ${{ matrix.preset }}
+      - run: cmake --build --preset ${{ matrix.preset }}
+      - run: ctest --preset ${{ matrix.preset }}
+
+  cpp-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        preset: [linux-gcc-debug, linux-gcc-release, linux-clang-sanitized]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lukka/run-vcpkg@v11
+      - run: cmake --preset ${{ matrix.preset }}
+      - run: cmake --build --preset ${{ matrix.preset }}
+      - run: ctest --preset ${{ matrix.preset }}
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            providers/package-lock.json
+            adapters/pi/package-lock.json
+            tests/llm-simulation/package-lock.json
+      - run: npm ci --prefix providers
+      - run: npm --prefix providers test
+      - run: npm ci --prefix adapters/pi
+      - run: npm --prefix adapters/pi test
+      - run: npm ci --prefix tests/llm-simulation
+      - run: npm --prefix tests/llm-simulation test

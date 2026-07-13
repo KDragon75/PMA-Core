@@ -1,0 +1,1 @@
+{"error":{"code":-32001,"data":{"category":"validation","code":"PMA_PROTOCOL_VERSION_MISMATCH","details":{"server_max":1,"server_min":1},"retryable":false},"message":"no compatible PMA protocol version"},"id":1,"jsonrpc":"2.0"}

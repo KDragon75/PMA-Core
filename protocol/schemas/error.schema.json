@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pma-core.dev/schemas/v1/error.schema.json",
+  "title": "PMA stable error data",
+  "type": "object",
+  "required": ["code", "category", "retryable", "details"],
+  "properties": {
+    "code": { "type": "string", "pattern": "^PMA_[A-Z0-9_]+$" },
+    "category": { "enum": ["validation", "not_found", "conflict", "incompatible_profile", "provider_unavailable", "provider_invalid_output", "storage", "corruption", "migration", "cancelled", "permission", "internal"] },
+    "retryable": { "type": "boolean" },
+    "details": { "type": "object" }
+  },
+  "additionalProperties": true
+}

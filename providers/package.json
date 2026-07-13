@@ -1,0 +1,8 @@
+{
+  "name": "@pma/providers-workspace",
+  "private": true,
+  "workspaces": ["node"],
+  "scripts": { "test": "npm test --workspace @pma/node-provider" },
+  "engines": { "node": ">=24 <25" },
+  "devDependencies": { "typescript": "5.8.3", "@types/node": "24.0.0" }
+}
