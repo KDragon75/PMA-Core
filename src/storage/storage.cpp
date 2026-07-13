@@ -106,6 +106,14 @@ void Statement::bind(std::size_t index, std::string_view value) {
   }
 }
 
+void Statement::bind_blob(std::size_t index, const std::vector<std::byte> &value) {
+  const int result = sqlite3_bind_blob64(impl_->statement, static_cast<int>(index), value.data(),
+                                         value.size(), SQLITE_TRANSIENT);
+  if (result != SQLITE_OK) {
+    fail(sqlite3_db_handle(impl_->statement), result, "bind blob");
+  }
+}
+
 void Statement::bind_null(std::size_t index) {
   const int result = sqlite3_bind_null(impl_->statement, static_cast<int>(index));
   if (result != SQLITE_OK) {
@@ -155,6 +163,16 @@ std::string Statement::column_text(std::size_t index) const {
     return {};
   }
   return {reinterpret_cast<const char *>(text), static_cast<std::size_t>(length)};
+}
+
+std::vector<std::byte> Statement::column_blob(std::size_t index) const {
+  const auto *data = static_cast<const std::byte *>(
+      sqlite3_column_blob(impl_->statement, static_cast<int>(index)));
+  const auto size = sqlite3_column_bytes(impl_->statement, static_cast<int>(index));
+  if (data == nullptr || size == 0) {
+    return {};
+  }
+  return {data, data + size};
 }
 
 bool Statement::column_is_null(std::size_t index) const {
@@ -338,6 +356,8 @@ void migrate(Database &database, const std::vector<Migration> &migrations,
     }
   }
 }
+
+std::string sha256(std::string_view content) { return checksum(content); }
 
 VerificationResult verify(Database &database) {
   VerificationResult result{true, {}};

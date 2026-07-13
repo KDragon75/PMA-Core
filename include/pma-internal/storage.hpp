@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -34,6 +35,7 @@ public:
   void bind(std::size_t index, std::int64_t value);
   void bind(std::size_t index, double value);
   void bind(std::size_t index, std::string_view value);
+  void bind_blob(std::size_t index, const std::vector<std::byte> &value);
   void bind_null(std::size_t index);
   [[nodiscard]] bool step();
   void execute();
@@ -41,6 +43,7 @@ public:
   [[nodiscard]] std::int64_t column_int64(std::size_t index) const;
   [[nodiscard]] double column_double(std::size_t index) const;
   [[nodiscard]] std::string column_text(std::size_t index) const;
+  [[nodiscard]] std::vector<std::byte> column_blob(std::size_t index) const;
   [[nodiscard]] bool column_is_null(std::size_t index) const;
 
 private:
@@ -99,5 +102,6 @@ struct VerificationResult {
 };
 
 [[nodiscard]] VerificationResult verify(Database &database);
+[[nodiscard]] std::string sha256(std::string_view content);
 
 } // namespace pma::storage
