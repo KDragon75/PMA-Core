@@ -3,5 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "build": "tsc -p tsconfig.json", "test": "npm run build && node --test dist/test/smoke.test.js" }
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/cli.js",
+    "test": "npm run build && node --test dist/test/provider.test.js",
+    "test:model": "npm run build && node --test dist/test/model-smoke.test.js"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.2.0",
+    "ajv": "8.20.0"
+  }
 }

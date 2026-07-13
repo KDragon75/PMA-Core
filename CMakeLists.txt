@@ -65,6 +65,10 @@ add_library(pma_vectors STATIC src/vectors/vectors.cpp)
 target_include_directories(pma_vectors PUBLIC include)
 target_link_libraries(pma_vectors PUBLIC pma_project_options pma_lifecycle)
 
+add_library(pma_provider_process STATIC src/platform/provider_process.cpp)
+target_include_directories(pma_provider_process PUBLIC include)
+target_link_libraries(pma_provider_process PUBLIC pma_project_options)
+
 find_package(nlohmann_json CONFIG REQUIRED)
 add_library(pma_service STATIC src/application/service.cpp src/transport/stdio.cpp)
 target_include_directories(pma_service PUBLIC include)
@@ -75,6 +79,7 @@ target_link_libraries(pma-core PRIVATE pma_project_options pma_storage pma_servi
 
 if(BUILD_TESTING)
   find_package(Catch2 CONFIG REQUIRED)
+  find_program(NODE_EXECUTABLE node REQUIRED)
   add_executable(pma-smoke-test tests/unit/smoke_test.cpp)
   target_link_libraries(pma-smoke-test PRIVATE pma_project_options Catch2::Catch2WithMain)
   add_executable(pma-storage-test tests/storage/storage_test.cpp)
@@ -85,6 +90,15 @@ if(BUILD_TESTING)
   target_link_libraries(pma-lifecycle-test PRIVATE pma_lifecycle Catch2::Catch2WithMain)
   add_executable(pma-vector-test tests/vectors/vector_test.cpp)
   target_link_libraries(pma-vector-test PRIVATE pma_vectors Catch2::Catch2WithMain)
+  add_executable(pma-provider-process-test tests/providers/provider_process_test.cpp)
+  target_compile_definitions(
+    pma-provider-process-test
+    PRIVATE PMA_NODE_EXECUTABLE="${NODE_EXECUTABLE}"
+            PMA_FAKE_PROVIDER_SCRIPT="${CMAKE_CURRENT_SOURCE_DIR}/tests/providers/fake-provider.mjs"
+  )
+  target_link_libraries(
+    pma-provider-process-test PRIVATE pma_provider_process nlohmann_json::nlohmann_json Catch2::Catch2WithMain
+  )
   add_executable(pma-service-test tests/protocol/service_test.cpp)
   target_compile_definitions(
     pma-service-test PRIVATE PMA_PROTOCOL_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/protocol/pma-service/fixtures"
@@ -98,9 +112,9 @@ if(BUILD_TESTING)
   catch_discover_tests(pma-graph-test)
   catch_discover_tests(pma-lifecycle-test)
   catch_discover_tests(pma-vector-test)
+  catch_discover_tests(pma-provider-process-test)
   catch_discover_tests(pma-service-test)
 
-  find_program(NODE_EXECUTABLE node REQUIRED)
   add_test(
     NAME pma-stdio-node-integration
     COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/protocol/stdio.integration.mjs

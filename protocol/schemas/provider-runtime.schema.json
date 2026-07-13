@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PMA provider runtime description",
+  "type": "object",
+  "required": ["providerPackage", "providerVersion", "runtimeType", "nodeVersion", "os", "architecture", "device", "backend", "model", "embedding", "lockfileHash", "optionsHash"],
+  "properties": {
+    "runtimeType": { "enum": ["transformers-js", "openai-compatible"] },
+    "model": { "type": "object", "required": ["id", "revision", "artifactHash", "tokenizerHash"] },
+    "embedding": { "type": "object", "required": ["dimensions", "dataType", "pooling", "normalize", "queryPrefix", "documentPrefix", "maxTokens", "truncation"] }
+  },
+  "additionalProperties": true
+}
