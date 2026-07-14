@@ -1,0 +1,36 @@
+name: Weekly soak and benchmarks
+
+on:
+  schedule:
+    - cron: "29 4 * * 0"
+  workflow_dispatch:
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: tests/llm-simulation/package-lock.json
+      - run: npm ci --prefix tests/llm-simulation
+      - run: npm --prefix tests/llm-simulation run simulate -- --interactions 10000 --mode pi-like --output ../../weekly-pi-report.json
+      - run: npm --prefix tests/llm-simulation run simulate -- --interactions 10000 --mode mcp-only --output ../../weekly-mcp-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: weekly-soak-reports
+          path: weekly-*-report.json
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lukka/run-vcpkg@v11
+      - run: cmake --preset linux-gcc-release
+      - run: cmake --build --preset linux-gcc-release --target pma-benchmark
+      - run: ./build/linux-gcc-release/pma-benchmark --benchmark_format=json --benchmark_out=benchmark.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: weekly-core-benchmarks
+          path: benchmark.json

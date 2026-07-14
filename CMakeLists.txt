@@ -85,6 +85,7 @@ target_link_libraries(pma-core PRIVATE pma_project_options pma_storage pma_servi
 
 if(BUILD_TESTING)
   find_package(Catch2 CONFIG REQUIRED)
+  find_package(benchmark CONFIG REQUIRED)
   find_program(NODE_EXECUTABLE node REQUIRED)
   add_executable(pma-smoke-test tests/unit/smoke_test.cpp)
   target_link_libraries(pma-smoke-test PRIVATE pma_project_options Catch2::Catch2WithMain)
@@ -112,6 +113,8 @@ if(BUILD_TESTING)
   target_link_libraries(
     pma-provider-process-test PRIVATE pma_provider_process nlohmann_json::nlohmann_json Catch2::Catch2WithMain
   )
+  add_executable(pma-benchmark tests/performance/pma_benchmark.cpp)
+  target_link_libraries(pma-benchmark PRIVATE pma_retrieval benchmark::benchmark)
   add_executable(pma-service-test tests/protocol/service_test.cpp)
   target_compile_definitions(
     pma-service-test PRIVATE PMA_PROTOCOL_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/protocol/pma-service/fixtures"
