@@ -96,6 +96,11 @@ if(BUILD_TESTING)
   target_link_libraries(pma-vector-test PRIVATE pma_vectors Catch2::Catch2WithMain)
   add_executable(pma-retrieval-test tests/retrieval/retrieval_test.cpp)
   target_link_libraries(pma-retrieval-test PRIVATE pma_retrieval Catch2::Catch2WithMain)
+  add_executable(pma-learning-recall-simulation-test
+                 tests/integration/learning_recall_simulation_test.cpp)
+  target_link_libraries(
+    pma-learning-recall-simulation-test PRIVATE pma_retrieval Catch2::Catch2WithMain
+  )
   add_executable(pma-provider-process-test tests/providers/provider_process_test.cpp)
   target_compile_definitions(
     pma-provider-process-test
@@ -119,6 +124,7 @@ if(BUILD_TESTING)
   catch_discover_tests(pma-lifecycle-test)
   catch_discover_tests(pma-vector-test)
   catch_discover_tests(pma-retrieval-test)
+  catch_discover_tests(pma-learning-recall-simulation-test)
   catch_discover_tests(pma-provider-process-test)
   catch_discover_tests(pma-service-test)
 
