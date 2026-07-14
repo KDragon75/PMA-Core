@@ -1,11 +1,36 @@
-# Initial model selection benchmark status
+# Embedding model selection
 
-No production model is hard-coded. The current recommendation process compares Transformers.js v4 compatibility, artifact reproducibility, Windows/Linux execution, local memory and latency, retrieval quality, and structured-output validity.
+## Selected candidate
 
-## Current smoke candidate
+PMA-Core uses **Qwen3-Embedding-0.6B** as its embedding candidate. The provider defaults used by the explicit model smoke test are:
 
-`Xenova/all-MiniLM-L6-v2` is a small embedding baseline suitable for smoke and latency measurements, not a final production selection. `test:model` accepts `PMA_TEST_EMBEDDING_MODEL` so candidates can be compared without source changes.
+- Repository: `onnx-community/Qwen3-Embedding-0.6B-ONNX`
+- Pooling: `last_token`
+- Dimensions: 1024
+- Normalization: enabled
+- Query instruction: `Instruct: Retrieve relevant persistent-memory knowledge for the query.\nQuery: `
+- Document prefix: empty
+- Quantization for local CPU smoke: Q4
+- Maximum input: 32768 tokens
 
-## Required report fields
+Runtime configuration remains explicit rather than silently overriding a configured profile. Every setting above participates in PMA's embedding profile and runtime identity.
 
-For every candidate record revision and artifact hashes, tokenizer hash, dimensions, pooling/prefix settings, corpus and relevance labels, recall@k/MRR, cold/warm latency, peak memory, structured fixture pass rate where applicable, and Windows/Linux reproducibility. Select production defaults only after this evidence is checked in.
+## Local model layout
+
+Model weights are not committed. Put a downloaded snapshot under:
+
+```text
+providers/node/models/Qwen3-Embedding-0.6B-ONNX/
+```
+
+Preserve the repository paths, including `onnx/`. At minimum retain the configuration, tokenizer files, and the selected ONNX graph and external-data shards required by that graph. Run locally with:
+
+```text
+PMA_RUN_MODEL_TEST=1
+PMA_TEST_MODEL_PATH=models/Qwen3-Embedding-0.6B-ONNX
+npm --prefix providers/node run test:model
+```
+
+## Benchmark follow-up
+
+Before declaring a release default, record artifact/tokenizer hashes, MTEB-style retrieval quality on PMA fixtures, recall@k/MRR, cold and warm latency, peak memory, Windows/Linux reproducibility, and Q4 versus Q8 drift. The user-directed Qwen selection replaces MiniLM as the target; evidence still determines release quantization and dimension policy.

@@ -65,6 +65,10 @@ add_library(pma_vectors STATIC src/vectors/vectors.cpp)
 target_include_directories(pma_vectors PUBLIC include)
 target_link_libraries(pma_vectors PUBLIC pma_project_options pma_lifecycle)
 
+add_library(pma_retrieval STATIC src/retrieval/retrieval.cpp)
+target_include_directories(pma_retrieval PUBLIC include)
+target_link_libraries(pma_retrieval PUBLIC pma_project_options pma_vectors)
+
 add_library(pma_provider_process STATIC src/platform/provider_process.cpp)
 target_include_directories(pma_provider_process PUBLIC include)
 target_link_libraries(pma_provider_process PUBLIC pma_project_options)
@@ -90,6 +94,8 @@ if(BUILD_TESTING)
   target_link_libraries(pma-lifecycle-test PRIVATE pma_lifecycle Catch2::Catch2WithMain)
   add_executable(pma-vector-test tests/vectors/vector_test.cpp)
   target_link_libraries(pma-vector-test PRIVATE pma_vectors Catch2::Catch2WithMain)
+  add_executable(pma-retrieval-test tests/retrieval/retrieval_test.cpp)
+  target_link_libraries(pma-retrieval-test PRIVATE pma_retrieval Catch2::Catch2WithMain)
   add_executable(pma-provider-process-test tests/providers/provider_process_test.cpp)
   target_compile_definitions(
     pma-provider-process-test
@@ -112,6 +118,7 @@ if(BUILD_TESTING)
   catch_discover_tests(pma-graph-test)
   catch_discover_tests(pma-lifecycle-test)
   catch_discover_tests(pma-vector-test)
+  catch_discover_tests(pma-retrieval-test)
   catch_discover_tests(pma-provider-process-test)
   catch_discover_tests(pma-service-test)
 

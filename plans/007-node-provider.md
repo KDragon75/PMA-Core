@@ -45,7 +45,7 @@ Transformers.js packages and model artifacts are external to core. Lazy imports 
 - [x] Provider host and adapters implemented.
 - [x] Runtime hashing and structured validation implemented.
 - [x] Core process manager implemented.
-- [x] Deterministic acceptance suites passing; external model-download smoke remains environment-gated.
+- [x] Deterministic acceptance suites and local Qwen model smoke passing.
 
 ## Decisions made during execution
 - Pin `@huggingface/transformers` 4.2.0 and Ajv 8.20.0 in the provider lockfile.
@@ -55,7 +55,7 @@ Transformers.js packages and model artifacts are external to core. Lazy imports 
 - Structured generation extracts JSON, validates with Ajv, retries exactly once, and returns bounded diagnostics/raw output on failure.
 - Added a cross-platform C++ child-process manager with stdio framing, cooperative cancellation, crash detection, and restart coverage; the core gained no HTTP or model-runtime dependency.
 - Node provider tests pass 4/4, covering structured retry, mock remote embeddings/chat, artifact hash changes, protocol stdout purity, crash, and restart.
-- The explicit `test:model` smoke test lazily runs a real Transformers.js embedding model when `PMA_RUN_MODEL_TEST=1`. Two public Hugging Face candidates were attempted on this host, but artifact requests were rejected as forbidden by the external service; no model is downloaded in normal CI.
+- The explicit `test:model` smoke test lazily runs the local Qwen3-Embedding-0.6B Q4 model when `PMA_RUN_MODEL_TEST=1`; it passed with 1024 finite normalized dimensions. Model artifacts remain ignored and are not downloaded in normal CI.
 - Windows MSVC Debug and Release each passed 42/42 CTest cases, including process restart and cancellation.
 - Existing Pi and simulation Node suites and `git diff --check` passed.
 - The model-selection report recommends a benchmark process and smoke baseline without hard-coding a production model. Linux execution remains delegated to CI.

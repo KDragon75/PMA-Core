@@ -1,4 +1,5 @@
 import os from "node:os";
+import path from "node:path";
 import { hashArtifacts, hashOptions, packageLockHash } from "./runtime.js";
 import type { ProviderAdapter, ProviderConfig, RuntimeDescription } from "./types.js";
 
@@ -38,7 +39,8 @@ export class TransformersAdapter implements ProviderAdapter {
       const transformers = await import("@huggingface/transformers");
       transformers.env.allowRemoteModels = !(this.config.localOnly ?? false);
       if (this.config.cacheDir) transformers.env.cacheDir = this.config.cacheDir;
-      const model = this.config.localModelPath ?? this.config.model;
+      const model = this.config.localModelPath ? path.basename(this.config.localModelPath) : this.config.model;
+      if (this.config.localModelPath) transformers.env.localModelPath = path.dirname(path.resolve(this.config.localModelPath));
       const options = {
         revision: this.config.revision ?? "main", device: this.config.device ?? "cpu",
         dtype: this.config.dtype ?? "fp32", local_files_only: this.config.localOnly ?? false
@@ -53,7 +55,10 @@ export class TransformersAdapter implements ProviderAdapter {
       const transformers = await import("@huggingface/transformers");
       transformers.env.allowRemoteModels = !(this.config.localOnly ?? false);
       if (this.config.cacheDir) transformers.env.cacheDir = this.config.cacheDir;
-      const model = this.config.localModelPath ?? this.config.generationModel ?? this.config.model;
+      const model = this.config.localModelPath
+        ? path.basename(this.config.localModelPath)
+        : this.config.generationModel ?? this.config.model;
+      if (this.config.localModelPath) transformers.env.localModelPath = path.dirname(path.resolve(this.config.localModelPath));
       const options = {
         revision: this.config.revision ?? "main", device: this.config.device ?? "cpu",
         dtype: this.config.dtype ?? "fp32", local_files_only: this.config.localOnly ?? false
@@ -76,7 +81,14 @@ export class TransformersAdapter implements ProviderAdapter {
       if (signal.aborted) throw new DOMException("cancelled", "AbortError");
       const tensor = await pipeline(prefix + text, { pooling: this.config.pooling ?? "mean",
         normalize: this.config.normalize ?? true });
-      output.push(Array.from(tensor.data));
+      const values = Array.from(tensor.data).slice(0, this.config.dimensions);
+      if ((this.config.normalize ?? true) && values.length > 0) {
+        const norm = Math.sqrt(values.reduce((sum, value) => sum + value * value, 0));
+        if (norm > 0) {
+          for (let index = 0; index < values.length; index++) values[index] = (values[index] ?? 0) / norm;
+        }
+      }
+      output.push(values);
     }
     return output;
   }

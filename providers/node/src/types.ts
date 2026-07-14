@@ -35,7 +35,7 @@ export interface ProviderConfig {
   model: string;
   revision?: string;
   dimensions: number;
-  pooling?: "mean" | "cls";
+  pooling?: "mean" | "cls" | "first_token" | "eos" | "last_token";
   normalize?: boolean;
   queryPrefix?: string;
   documentPrefix?: string;
