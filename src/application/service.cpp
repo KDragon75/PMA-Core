@@ -237,7 +237,8 @@ struct Dispatcher::Impl {
     }
     try {
       if (lifecycle_processor) {
-        auto queued = database->prepare("SELECT id FROM jobs WHERE state='queued' ORDER BY created_at,id");
+        auto queued = database->prepare(
+            "SELECT id FROM jobs WHERE state='queued' ORDER BY created_at,id LIMIT 10");
         std::vector<std::string> job_ids;
         while (queued.step()) job_ids.push_back(queued.column_text(0));
         for (const auto &job_id : job_ids) lifecycle_processor->run_job(job_id, *provider);
