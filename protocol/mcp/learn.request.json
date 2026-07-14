@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pma_learn","arguments":{"statement":"SQLite is authoritative","authority":"explicit_user"}}}

@@ -40,10 +40,13 @@ jobs:
           cache-dependency-path: |
             providers/package-lock.json
             adapters/pi/package-lock.json
+            adapters/mcp/package-lock.json
             tests/llm-simulation/package-lock.json
       - run: npm ci --prefix providers
       - run: npm --prefix providers test
       - run: npm ci --prefix adapters/pi
       - run: npm --prefix adapters/pi test
+      - run: npm ci --prefix adapters/mcp
+      - run: npm --prefix adapters/mcp test
       - run: npm ci --prefix tests/llm-simulation
       - run: npm --prefix tests/llm-simulation test

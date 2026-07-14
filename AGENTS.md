@@ -40,6 +40,7 @@ cmake --build --preset <preset>
 ctest --preset <preset>
 npm --prefix providers test
 npm --prefix adapters/pi test
+npm --prefix adapters/mcp test
 npm --prefix tests/llm-simulation test
 ```
 

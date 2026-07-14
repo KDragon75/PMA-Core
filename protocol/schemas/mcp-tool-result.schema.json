@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PMA MCP tool result",
+  "type": "object",
+  "required": ["content", "isError"],
+  "properties": {
+    "content": { "type": "array", "items": { "type": "object", "required": ["type", "text"], "properties": { "type": { "const": "text" }, "text": { "type": "string", "maxLength": 50020 } } },
+    "structuredContent": {},
+    "isError": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}
