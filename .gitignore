@@ -8,4 +8,6 @@
 *.user
 *.suo
 *.VC.db
+/tests/llm-simulation/reports/*.xml
+/tests/llm-simulation/reports/*.txt
 .DS_Store
