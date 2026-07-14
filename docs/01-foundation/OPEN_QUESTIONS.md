@@ -36,3 +36,4 @@ Open questions should not be silently resolved during implementation. Link the t
 18. **Performance gates** — Replace provisional targets with measured release thresholds after the first end-to-end prototype.
 19. **Stress-test model diversity** — Define the minimum independent model families needed to reduce circular evaluation.
 20. **Supported platform matrix** — Windows x64 and Linux x64 are initial; ARM64 support remains a later decision.
+21. **Project license** — The copyright owner must select and approve the source and binary distribution license before a public release; Task 012 does not infer permission to grant rights.

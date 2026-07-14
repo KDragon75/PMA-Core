@@ -74,6 +74,10 @@ target_include_directories(pma_provider_process PUBLIC include)
 target_link_libraries(pma_provider_process PUBLIC pma_project_options)
 
 find_package(nlohmann_json CONFIG REQUIRED)
+add_library(pma_maintenance STATIC src/application/maintenance.cpp)
+target_include_directories(pma_maintenance PUBLIC include)
+target_link_libraries(pma_maintenance PUBLIC pma_project_options pma_storage)
+
 add_library(pma_service STATIC src/application/service.cpp src/transport/stdio.cpp)
 target_include_directories(pma_service PUBLIC include)
 target_link_libraries(
@@ -81,7 +85,7 @@ target_link_libraries(
 )
 
 add_executable(pma-core src/main/main.cpp)
-target_link_libraries(pma-core PRIVATE pma_project_options pma_storage pma_service)
+target_link_libraries(pma-core PRIVATE pma_project_options pma_storage pma_service pma_maintenance)
 
 if(BUILD_TESTING)
   find_package(Catch2 CONFIG REQUIRED)
@@ -91,6 +95,8 @@ if(BUILD_TESTING)
   target_link_libraries(pma-smoke-test PRIVATE pma_project_options Catch2::Catch2WithMain)
   add_executable(pma-storage-test tests/storage/storage_test.cpp)
   target_link_libraries(pma-storage-test PRIVATE pma_storage Catch2::Catch2WithMain)
+  add_executable(pma-maintenance-test tests/storage/maintenance_test.cpp)
+  target_link_libraries(pma-maintenance-test PRIVATE pma_maintenance Catch2::Catch2WithMain)
   add_executable(pma-graph-test tests/graph/graph_test.cpp)
   target_link_libraries(pma-graph-test PRIVATE pma_graph Catch2::Catch2WithMain)
   add_executable(pma-lifecycle-test tests/lifecycle/lifecycle_test.cpp)
@@ -99,6 +105,10 @@ if(BUILD_TESTING)
   target_link_libraries(pma-vector-test PRIVATE pma_vectors Catch2::Catch2WithMain)
   add_executable(pma-retrieval-test tests/retrieval/retrieval_test.cpp)
   target_link_libraries(pma-retrieval-test PRIVATE pma_retrieval Catch2::Catch2WithMain)
+  add_executable(pma-release-gate-test tests/integration/release_gate_test.cpp)
+  target_link_libraries(
+    pma-release-gate-test PRIVATE pma_retrieval pma_maintenance Catch2::Catch2WithMain
+  )
   add_executable(pma-learning-recall-simulation-test
                  tests/integration/learning_recall_simulation_test.cpp)
   target_link_libraries(
@@ -125,10 +135,12 @@ if(BUILD_TESTING)
   include(Catch)
   catch_discover_tests(pma-smoke-test)
   catch_discover_tests(pma-storage-test)
+  catch_discover_tests(pma-maintenance-test)
   catch_discover_tests(pma-graph-test)
   catch_discover_tests(pma-lifecycle-test)
   catch_discover_tests(pma-vector-test)
   catch_discover_tests(pma-retrieval-test)
+  catch_discover_tests(pma-release-gate-test)
   catch_discover_tests(pma-learning-recall-simulation-test)
   catch_discover_tests(pma-provider-process-test)
   catch_discover_tests(pma-service-test)
@@ -139,3 +151,18 @@ if(BUILD_TESTING)
             $<TARGET_FILE:pma-core>
   )
 endif()
+
+include(GNUInstallDirs)
+install(TARGETS pma-core RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES LICENSE THIRD_PARTY_NOTICES.md
+              docs/07-delivery/COMPATIBILITY_AND_LIMITATIONS.md
+              docs/07-delivery/MIGRATION_MATRIX.md
+              docs/07-delivery/SECURITY_REVIEW_0.1.0.md
+              docs/07-delivery/UPGRADE_AND_RECOVERY.md
+        DESTINATION ${CMAKE_INSTALL_DOCDIR})
+set(CPACK_PACKAGE_NAME "pma-core")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_VENDOR "PMA-Core")
+set(CPACK_PACKAGE_FILE_NAME "pma-core-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+set(CPACK_GENERATOR "ZIP;TGZ")
+include(CPack)

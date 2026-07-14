@@ -1,4 +1,7 @@
 /build/
+/_CPack_Packages/
+/pma-core-*.zip
+/pma-core-*.tar.gz
 /.pma/
 /node_modules/
 **/node_modules/

@@ -1,0 +1,60 @@
+name: Release artifacts
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            preset: windows-msvc-release
+          - os: ubuntu-latest
+            preset: linux-gcc-release
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lukka/run-vcpkg@v11
+      - run: cmake --preset ${{ matrix.preset }}
+      - run: cmake --build --preset ${{ matrix.preset }}
+      - run: ctest --preset ${{ matrix.preset }}
+      - run: cpack --config build/${{ matrix.preset }}/CPackConfig.cmake -C Release
+      - shell: bash
+        run: |
+          mkdir -p release-native
+          mv pma-core-0.1.0-* release-native/
+          cd release-native
+          sha256sum pma-core-0.1.0-* > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pma-core-${{ matrix.os }}
+          path: release-native/
+
+  node-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            providers/package-lock.json
+            adapters/pi/package-lock.json
+            adapters/mcp/package-lock.json
+      - run: npm ci --prefix providers && npm --prefix providers test
+      - run: npm ci --prefix adapters/pi && npm --prefix adapters/pi test
+      - run: npm ci --prefix adapters/mcp && npm --prefix adapters/mcp test
+      - run: mkdir release-node && npm pack ./providers/node --pack-destination "$PWD/release-node" && npm pack ./adapters/pi --pack-destination "$PWD/release-node" && npm pack ./adapters/mcp --pack-destination "$PWD/release-node"
+      - run: cp providers/package-lock.json release-node/providers-package-lock.json && cp adapters/pi/package-lock.json release-node/pi-package-lock.json && cp adapters/mcp/package-lock.json release-node/mcp-package-lock.json && cp THIRD_PARTY_NOTICES.md release-node/
+      - run: cd release-node && sha256sum *.tgz *-package-lock.json THIRD_PARTY_NOTICES.md > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pma-node-packages
+          path: release-node/

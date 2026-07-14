@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";

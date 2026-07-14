@@ -1,8 +1,12 @@
 {
   "name": "@pma/node-provider",
   "version": "0.1.0",
+  "license": "UNLICENSED",
   "private": true,
   "type": "module",
+  "bin": { "pma-provider": "dist/src/cli.js" },
+  "files": ["dist/src", "MODEL_SELECTION.md", "package-lock.json"],
+  "engines": { "node": ">=24 <25" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/cli.js",

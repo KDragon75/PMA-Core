@@ -55,6 +55,10 @@ This directory is ordered from foundational intent to delivery. Documents are de
 - [Work packages](07-delivery/WORK_PACKAGES.md)
 - [Definition of done](07-delivery/DEFINITION_OF_DONE.md)
 - [Release and versioning](07-delivery/RELEASE_AND_VERSIONING.md)
+- [Compatibility and known limitations](07-delivery/COMPATIBILITY_AND_LIMITATIONS.md)
+- [Migration matrix](07-delivery/MIGRATION_MATRIX.md)
+- [Upgrade and recovery](07-delivery/UPGRADE_AND_RECOVERY.md)
+- [0.1.0 security review](07-delivery/SECURITY_REVIEW_0.1.0.md)
 
 ## Decision records and references
 

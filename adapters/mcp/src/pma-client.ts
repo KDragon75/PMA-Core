@@ -46,7 +46,13 @@ export class ChildPmaService implements PmaService {
       new Promise<void>(resolve => child.once("exit", () => resolve())),
       new Promise<void>(resolve => setTimeout(resolve, 1000))
     ]);
-    if (child.exitCode === null) child.kill();
+    if (child.exitCode === null) {
+      child.kill();
+      await Promise.race([
+        new Promise<void>(resolve => child.once("exit", () => resolve())),
+        new Promise<void>(resolve => setTimeout(resolve, 1000))
+      ]);
+    }
     this.child = undefined;
   }
 

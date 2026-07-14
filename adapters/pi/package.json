@@ -1,8 +1,10 @@
 {
   "name": "@pma/pi-adapter",
   "version": "0.1.0",
+  "license": "UNLICENSED",
   "private": true,
   "type": "module",
+  "files": ["src", "dist/src", "package-lock.json"],
   "pi": { "extensions": ["./src/index.ts"] },
   "scripts": {
     "build": "tsc -p tsconfig.json",

@@ -1,9 +1,11 @@
 {
   "name": "@pma/mcp-adapter",
   "version": "0.1.0",
+  "license": "UNLICENSED",
   "private": true,
   "type": "module",
   "bin": { "pma-mcp": "dist/src/cli.js" },
+  "files": ["dist/src", "README.md", "package-lock.json"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test dist/test/mcp.test.js"
