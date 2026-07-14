@@ -461,10 +461,30 @@ void Processor::apply(std::string_view job_id, const std::vector<Proposal> &prop
       input.bind(2, evidence_id);
       input.execute();
     }
+    const std::string document_id = "embedding:" + *result_id;
+    auto rendered = database_->prepare(
+        "SELECT s.canonical_name,p.name,COALESCE(o.canonical_name,v.text_value),c.status "
+        "FROM claims c JOIN entities s ON s.id=c.subject_id "
+        "JOIN predicates p ON p.id=c.predicate_id "
+        "LEFT JOIN entities o ON o.id=c.object_entity_id "
+        "LEFT JOIN typed_values v ON v.id=c.typed_value_id WHERE c.id=?1");
+    rendered.bind(1, *result_id);
+    if (!rendered.step()) throw Error(ErrorCode::constraint, 0, "claim not found for embedding");
+    const std::string text = rendered.column_text(0) + " | " + rendered.column_text(1) +
+                             " | " + rendered.column_text(2);
+    if (creates) {
+      auto document = database_->prepare(
+          "INSERT INTO embedding_documents(id,object_type,object_id,text,revision) "
+          "VALUES(?1,'claim',?2,?3,1)");
+      document.bind(1, document_id);
+      document.bind(2, *result_id);
+      document.bind(3, text);
+      document.execute();
+    }
     auto event = database_->prepare(
         "INSERT INTO embedding_events(operation_id,object_id,action) VALUES(?1,?2,'upsert')");
     event.bind(1, operation_id);
-    event.bind(2, *result_id);
+    event.bind(2, document_id);
     event.execute();
   }
   transaction.commit();

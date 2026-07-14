@@ -2,6 +2,7 @@
 
 #include "pma-internal/graph.hpp"
 #include "pma-internal/lifecycle.hpp"
+#include "pma-internal/provider_process.hpp"
 #include "pma-internal/retrieval.hpp"
 #include "pma-internal/storage.hpp"
 #include "pma-internal/vectors.hpp"
@@ -9,6 +10,7 @@
 #include <nlohmann/json.hpp>
 
 #include <filesystem>
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -51,10 +53,94 @@ PublicError invalid_params(std::string message) {
   return {-32602, "PMA_INVALID_PARAMS", "validation", std::move(message)};
 }
 
+class ProcessEmbeddingProvider final : public vectors::EmbeddingProvider,
+                                       public lifecycle::ProposalProvider {
+public:
+  ProcessEmbeddingProvider(std::vector<std::string> command, Json config)
+      : process_(std::move(command)), config_(std::move(config)) {
+    process_.start();
+    const auto response = call("provider.initialize", {{"config", config_}});
+    runtime_ = response.at("runtime");
+  }
+
+  std::vector<float> embed(std::string_view text, const vectors::Profile &) override {
+    return vectors_from(call("embedding.embed_documents", {{"texts", Json::array({text})}})
+                            .at("vectors").at(0));
+  }
+
+  std::vector<float> embed_query(std::string_view text) {
+    return vectors_from(call("embedding.embed_query", {{"text", text}}).at("vector"));
+  }
+
+  std::vector<lifecycle::Proposal>
+  propose(const std::vector<graph::EvidenceSegment> &evidence) override {
+    try {
+    std::string task = "Extract only durable, reusable facts, preferences, decisions, procedures, or corrections "
+                       "explicitly supported by this evidence. Omit transient conversation and speculation. Evidence:\n";
+    for (const auto &item : evidence) task += "[" + item.id + "] " + item.text + "\n";
+    const Json schema = {{"type", "object"},
+                         {"additionalProperties", false},
+                         {"required", Json::array({"memories"})},
+                         {"properties", {{"memories", {{"type", "array"}, {"items", {
+                           {"type", "object"}, {"additionalProperties", false},
+                           {"required", Json::array({"statement", "evidence_ids", "confidence"})},
+                           {"properties", {
+                             {"statement", {{"type", "string"}, {"minLength", 1}}},
+                             {"evidence_ids", {{"type", "array"}, {"items", {{"type", "string"}}}, {"minItems", 1}}},
+                             {"confidence", {{"type", "number"}, {"minimum", 0}, {"maximum", 1}}}
+                           }}
+                         }}}}}}};
+    const auto result = call("generation.generate_structured", {{"task", task}, {"schema", schema}});
+    std::set<std::string> allowed;
+    for (const auto &item : evidence) allowed.insert(item.id);
+    std::vector<lifecycle::Proposal> proposals;
+    for (const auto &memory : result.at("value").at("memories")) {
+      std::vector<std::string> ids;
+      for (const auto &id : memory.at("evidence_ids")) {
+        const auto value = id.get<std::string>();
+        if (allowed.contains(value)) ids.push_back(value);
+      }
+      if (ids.empty()) continue;
+      proposals.push_back({lifecycle::OperationType::create, "entity:learned-memory",
+                           "pred:has_property", std::nullopt,
+                           memory.at("statement").get<std::string>(), std::nullopt,
+                           std::nullopt, std::move(ids), "observed",
+                           memory.at("confidence").get<double>()});
+    }
+    return proposals;
+    } catch (const std::exception &error) {
+      throw lifecycle::ProviderError(error.what());
+    }
+  }
+
+  const Json &runtime() const { return runtime_; }
+
+private:
+  Json call(std::string_view method, Json params) {
+    const auto id = next_id_++;
+    const auto response = Json::parse(process_.request(
+        Json{{"jsonrpc", "2.0"}, {"id", id}, {"method", method}, {"params", std::move(params)}}.dump()));
+    if (response.contains("error")) throw std::runtime_error("provider request failed");
+    return response.at("result");
+  }
+
+  static std::vector<float> vectors_from(const Json &values) {
+    std::vector<float> result;
+    result.reserve(values.size());
+    for (const auto &value : values) result.push_back(value.get<float>());
+    return result;
+  }
+
+  providers::Process process_;
+  Json config_;
+  Json runtime_;
+  std::int64_t next_id_{1};
+};
+
 Json capabilities() {
   return {{"methods",
            Json::array({"pma.initialize", "pma.health", "pma.get_capabilities",
-                        "pma.get_status", "pma.shutdown", "$/cancelRequest"})},
+                        "pma.get_status", "pma.vectors.sync", "pma.shutdown", "$/cancelRequest"})},
           {"notifications", Json::array({"$/cancelRequest"})},
           {"transport", "stdio-ndjson"}};
 }
@@ -77,6 +163,10 @@ struct Dispatcher::Impl {
   std::unique_ptr<lifecycle::Processor> lifecycle_processor;
   std::unique_ptr<vectors::Manager> vector_manager;
   std::unique_ptr<retrieval::Engine> retrieval_engine;
+  std::unique_ptr<ProcessEmbeddingProvider> provider;
+  std::optional<std::string> active_vector_store;
+  std::string provider_status{"not_configured"};
+  std::string provider_error;
   std::unordered_map<std::string, PendingInteraction> interactions;
 
   void initialize_runtime(const Json &params) {
@@ -94,6 +184,93 @@ struct Dispatcher::Impl {
     vector_manager->initialize(core_version);
     retrieval_engine = std::make_unique<retrieval::Engine>(*database, vector_manager.get());
     retrieval_engine->initialize(core_version);
+
+    auto learned = database->prepare("SELECT 1 FROM entities WHERE id='entity:learned-memory'");
+    if (!learned.step()) graph_store->create_entity("entity:learned-memory", "Learned memory", "concept");
+
+    provider.reset();
+    active_vector_store.reset();
+    provider_status = "not_configured";
+    provider_error.clear();
+    if (params.contains("provider") && params["provider"].is_object()) {
+      try {
+        const auto &configuration = params["provider"];
+        const auto command = configuration.at("command").get<std::vector<std::string>>();
+        provider = std::make_unique<ProcessEmbeddingProvider>(command, configuration.at("config"));
+        const auto &runtime = provider->runtime();
+        const auto fingerprint_source = runtime.dump();
+        const std::string suffix = storage::sha256(fingerprint_source).substr(0, 24);
+        vectors::RuntimeManifest manifest{
+            "runtime:" + suffix,
+            runtime.value("providerPackage", "unknown"), runtime.value("providerVersion", "unknown"),
+            runtime.value("nodeVersion", "unknown"), runtime.value("os", "unknown"),
+            runtime.value("architecture", "unknown"), runtime.value("lockfileHash", "unknown"),
+            runtime.value("backend", "unknown"), runtime.value("optionsHash", "unknown")};
+        const auto &embedding = runtime.at("embedding");
+        const auto &model = runtime.at("model");
+        vectors::Profile profile{
+            "profile:" + suffix, runtime.value("providerPackage", "unknown"),
+            runtime.value("runtimeType", "unknown"), model.value("artifactHash", "unknown"),
+            model.value("revision", "unknown"), model.value("tokenizerHash", "unknown"),
+            embedding.at("dimensions").get<std::int64_t>(), "float32-le",
+            embedding.value("pooling", "mean"), embedding.value("normalize", true),
+            embedding.value("queryPrefix", ""), embedding.value("documentPrefix", ""),
+            embedding.value("maxTokens", 512), embedding.value("truncation", "end"),
+            "claim-v1", runtime.value("optionsHash", "unknown")};
+        vector_manager->register_profile(profile, manifest);
+        provider_status = "ready";
+      } catch (const std::exception &error) {
+        provider.reset();
+        provider_status = "unavailable";
+        provider_error = error.what();
+      }
+    }
+
+    auto active = database->prepare(
+        "SELECT id FROM vector_store_registry WHERE state='active' ORDER BY generation DESC LIMIT 1");
+    if (active.step()) active_vector_store = active.column_text(0);
+  }
+
+  Json sync_vectors() {
+    if (!provider || !vector_manager || !database) {
+      return {{"status", provider_status}, {"synchronized", false}};
+    }
+    try {
+      if (lifecycle_processor) {
+        auto queued = database->prepare("SELECT id FROM jobs WHERE state='queued' ORDER BY created_at,id");
+        std::vector<std::string> job_ids;
+        while (queued.step()) job_ids.push_back(queued.column_text(0));
+        for (const auto &job_id : job_ids) lifecycle_processor->run_job(job_id, *provider);
+      }
+      const std::string profile_id = "profile:" + storage::sha256(provider->runtime().dump()).substr(0, 24);
+      auto active = database->prepare(
+          "SELECT id FROM vector_store_registry WHERE profile_id=?1 AND state='active' "
+          "ORDER BY generation DESC LIMIT 1");
+      active.bind(1, profile_id);
+      if (active.step()) {
+        active_vector_store = active.column_text(0);
+        vector_manager->catch_up(*active_vector_store, *provider);
+      } else {
+        auto generation = database->prepare(
+            "SELECT COALESCE(max(generation),0)+1 FROM vector_store_registry WHERE profile_id=?1");
+        generation.bind(1, profile_id);
+        (void)generation.step();
+        const auto number = generation.column_int64(0);
+        const std::string store_id = profile_id + ":generation:" + std::to_string(number);
+        const std::string runtime_id = "runtime:" + storage::sha256(provider->runtime().dump()).substr(0, 24);
+        vector_manager->build(store_id, profile_id, number, runtime_id, *provider);
+        vector_manager->activate(store_id);
+        active_vector_store = store_id;
+      }
+      provider_status = "ready";
+      const auto info = vector_manager->inspect(*active_vector_store);
+      return {{"status", "ready"}, {"synchronized", true}, {"store_id", info.id},
+              {"watermark", info.watermark}, {"vector_count", info.vector_count}};
+    } catch (const std::exception &error) {
+      provider_status = "degraded";
+      provider_error = error.what();
+      return {{"status", "degraded"}, {"synchronized", false}};
+    }
   }
 
   Json dispatch(std::string_view method, const Json &params) {
@@ -121,11 +298,11 @@ struct Dispatcher::Impl {
       initialized = true;
       return {{"protocol_version", protocol_version},
               {"core_version", core_version},
-              {"core_schema_version", 0},
-              {"vector_schema_version", 0},
+              {"core_schema_version", 400},
+              {"vector_schema_version", 1},
               {"capabilities", capabilities()},
-              {"provider_availability", Json::array()},
-              {"vector_store", {{"status", "not_configured"}}},
+              {"provider_availability", Json::array({provider_status})},
+              {"vector_store", {{"status", active_vector_store ? "active" : "not_configured"}}},
               {"feature_flags", Json::object()}};
     }
     if (method == "pma.health") {
@@ -190,9 +367,22 @@ struct Dispatcher::Impl {
       interactions.erase(found);
       return {{"accepted", true}, {"job_id", "job:" + interaction_id}};
     }
-    if (method == "pma.learning.process_interaction" || method == "pma.learning.consolidate") {
-      return {{"queued", true}};
+    if (method == "pma.learning.process_interaction") {
+      if (!lifecycle_processor || !provider) {
+        return {{"queued", true}, {"processed", false}, {"provider_status", provider_status}};
+      }
+      const std::string interaction_id = params.value("interaction_id", "");
+      if (interaction_id.empty()) throw invalid_params("interaction_id is required");
+      try {
+        lifecycle_processor->run_job("job:" + interaction_id, *provider);
+        return {{"queued", false}, {"processed", true}};
+      } catch (const std::exception &) {
+        provider_status = "degraded";
+        return {{"queued", true}, {"processed", false}, {"provider_status", provider_status}};
+      }
     }
+    if (method == "pma.learning.consolidate") return {{"queued", true}};
+    if (method == "pma.vectors.sync") return sync_vectors();
     if (method == "pma.learning.propose") {
       if (!database || !graph_store || !lifecycle_processor ||
           !params.contains("statement") || !params["statement"].is_string()) {
@@ -256,6 +446,16 @@ struct Dispatcher::Impl {
       if (params.contains("selected_limit") && params["selected_limit"].is_number_integer()) {
         request.selected_limit = params["selected_limit"].get<std::size_t>();
       }
+      if (provider && active_vector_store) {
+        try {
+          request.vector_store_id = *active_vector_store;
+          request.query_vector = provider->embed_query(request.query);
+        } catch (const std::exception &) {
+          request.vector_store_id.reset();
+          request.query_vector.reset();
+          provider_status = "degraded";
+        }
+      }
       const auto packet = retrieval_engine->recall(request);
       const auto slice = retrieval_engine->render_slice(
           packet, params.value("token_budget", static_cast<std::size_t>(600)));
@@ -282,9 +482,24 @@ struct Dispatcher::Impl {
       return capabilities();
     }
     if (method == "pma.get_status") {
-      return {{"state", "ready"},
+      Json vector = {{"status", active_vector_store ? "active" : "not_configured"}};
+      if (active_vector_store && vector_manager) {
+        const auto info = vector_manager->inspect(*active_vector_store);
+        vector = {{"status", info.state}, {"store_id", info.id}, {"profile_id", info.profile_id},
+                  {"watermark", info.watermark}, {"vector_count", info.vector_count}};
+      }
+      std::int64_t pending_count = 0;
+      if (database) {
+        auto pending = database->prepare("SELECT count(*) FROM jobs WHERE state IN ('queued','failed')");
+        (void)pending.step();
+        pending_count = pending.column_int64(0);
+      }
+      return {{"state", provider_status == "degraded" ? "degraded" : "ready"},
               {"protocol_version", protocol_version},
               {"core_version", core_version},
+              {"core_schema_version", 400}, {"vector_schema_version", 1},
+              {"provider", {{"status", provider_status}}}, {"vector_store", vector},
+              {"pending_learning_jobs", pending_count},
               {"cancelled_request_count", cancelled_ids.size()}};
     }
     throw PublicError{-32603, "PMA_INTERNAL", "internal", "internal PMA error"};

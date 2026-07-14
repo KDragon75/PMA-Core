@@ -55,7 +55,9 @@ The MVP does not refresh mid-turn. Later refresh triggers may include material t
 
 - Complete the interaction.
 - Record recall outcome evidence.
-- Queue extraction and immediate integration.
+- Run or durably queue extraction and immediate integration through the configured provider.
+- Catch up the compatible vector projection, or build and activate its first generation.
+- Degrade to lexical/graph retrieval without losing queued work when the provider is unavailable.
 - Clear the active ContextSlice.
 
 ### `session_before_compact`
@@ -88,6 +90,19 @@ Automatic lifecycle behavior must not rely on the model calling these tools.
 ## Session files
 
 Pi JSONL sessions are external evidence and may branch. The adapter records source IDs and parent relationships but never uses the Pi file as PMA's canonical knowledge store.
+
+## Provider configuration
+
+Provider use is explicit. Set both environment variables before starting Pi:
+
+```text
+PMA_PROVIDER_COMMAND=["node","/absolute/path/to/provider/dist/src/cli.js"]
+PMA_PROVIDER_CONFIG={"kind":"transformers-js","model":"onnx-community/Qwen3-Embedding-0.6B-ONNX","dimensions":1024,"pooling":"last_token","normalize":true,"queryPrefix":"Instruct: Retrieve relevant persistent-memory knowledge for the query.\nQuery: ","documentPrefix":"","maxTokens":32768,"localModelPath":"/absolute/path/to/embedding-model","generationModel":"/absolute/path/to/structured-generation-model"}
+```
+
+The values are JSON, including on Windows. `PMA_PROVIDER_COMMAND` is an argument array so paths with spaces remain unambiguous. Secrets in remote configurations use symbolic `env:VARIABLE_NAME` references. Without configuration, evidence capture and FTS/graph recall continue while provider learning and vectors report `not_configured`.
+
+At session startup, the extension asks PMA to resume queued learning and stale vector work. After each settled interaction it processes the interaction and synchronizes vectors. Response-model changes never alter this provider configuration.
 
 ## Extension instructions
 

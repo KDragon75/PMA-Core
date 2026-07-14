@@ -81,7 +81,7 @@ target_link_libraries(pma_maintenance PUBLIC pma_project_options pma_storage)
 add_library(pma_service STATIC src/application/service.cpp src/transport/stdio.cpp)
 target_include_directories(pma_service PUBLIC include)
 target_link_libraries(
-  pma_service PUBLIC pma_project_options PRIVATE pma_retrieval nlohmann_json::nlohmann_json
+  pma_service PUBLIC pma_project_options PRIVATE pma_retrieval pma_provider_process nlohmann_json::nlohmann_json
 )
 
 add_executable(pma-core src/main/main.cpp)
@@ -128,6 +128,8 @@ if(BUILD_TESTING)
   add_executable(pma-service-test tests/protocol/service_test.cpp)
   target_compile_definitions(
     pma-service-test PRIVATE PMA_PROTOCOL_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/protocol/pma-service/fixtures"
+      PMA_NODE_EXECUTABLE="${NODE_EXECUTABLE}"
+      PMA_FAKE_PROVIDER_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/providers/fake-provider.mjs"
   )
   target_link_libraries(
     pma-service-test PRIVATE pma_service nlohmann_json::nlohmann_json Catch2::Catch2WithMain

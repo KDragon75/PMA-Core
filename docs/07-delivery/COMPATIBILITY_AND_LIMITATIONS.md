@@ -31,7 +31,7 @@ Google Benchmark output is compared by platform/compiler/build type. A single no
 
 ## Known limitations
 
-- Automatic settled learning is queued by the Pi adapter; a continuously owned background provider-job scheduler is not included.
+- Pi processes configured learning and vector work at session startup and after settled interactions. A continuously running worker outside an active Pi session is not included.
 - The hidden-world harness uses scripted role outputs by default. Real multi-model diversity is an opt-in evaluation, not deterministic authority.
 - Flat vector search is intended for single-user scale; large-scale approximate indexing is not included.
 - Models and model caches are not distributed. Runtime manifests identify required artifacts.

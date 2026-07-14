@@ -21,6 +21,7 @@ export interface MessageLike {
 }
 
 export interface SliceResult { packet_id?: string; slice?: string; text?: string }
+export interface ProviderConfiguration { command: string[]; config: Record<string, unknown> }
 
 export class LifecycleController {
   private session: SessionContext | undefined;
@@ -33,7 +34,8 @@ export class LifecycleController {
   private settled = true;
   private responseModel: string | undefined;
 
-  constructor(private readonly client: RpcClient) {}
+  constructor(private readonly client: RpcClient,
+              private readonly provider?: ProviderConfiguration) {}
 
   async startSession(context: SessionContext, branchEntries: Array<{ id?: string; message?: MessageLike }> = []): Promise<void> {
     this.session = context;
@@ -44,12 +46,14 @@ export class LifecycleController {
       environment: { external_key: context.environment, cwd: context.cwd, repository: context.repository },
       session: { external_key: context.sessionId, source_file: context.sessionFile },
       database_path: join(context.cwd, ".pma", "pma.sqlite"),
-      bundle_root: join(context.cwd, ".pma")
+      bundle_root: join(context.cwd, ".pma"),
+      ...(this.provider ? { provider: this.provider } : {})
     });
     await this.safeRequest("pma.session.open", {
       session_id: context.sessionId, source_adapter: "pi", source_file: context.sessionFile,
       cwd: context.cwd, repository: context.repository, environment: context.environment
     });
+    await this.safeRequest("pma.vectors.sync", { reason: "session_start" });
     await this.reconcile(branchEntries);
   }
 
@@ -105,6 +109,9 @@ export class LifecycleController {
     });
     await this.safeRequest("pma.learning.process_interaction", {
       interaction_id: this.interactionId, idempotency_key: `${this.interactionId}:learn`
+    });
+    await this.safeRequest("pma.vectors.sync", {
+      interaction_id: this.interactionId, idempotency_key: `${this.interactionId}:vectors`
     });
     this.settled = true;
     this.cachedSlice = "";

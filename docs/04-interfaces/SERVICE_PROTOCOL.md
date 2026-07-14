@@ -23,6 +23,9 @@ The client calls `pma.initialize` with:
 - Requested capabilities.
 - Active environment observations.
 - Optional session source identity.
+- Optional external provider configuration containing a command argument array and provider-specific configuration object. Secrets are symbolic environment references, not literal persisted values.
+
+When configured, initialization starts the external provider, records its effective runtime identity, and selects an exact embedding profile. Provider failure does not prevent authoritative initialization.
 
 The server returns:
 
@@ -97,7 +100,10 @@ pma.vector.verify
 pma.vector.activate
 pma.vector.retire
 pma.vector.reconstruct_environment
+pma.vectors.sync
 ```
+
+`pma.vectors.sync` resumes queued learning jobs, catches up an exact compatible active projection, or builds, validates, and activates the first generation. It is safe to invoke at session startup and after settled learning. Failure returns degraded status while authoritative evidence and queued jobs remain intact.
 
 ### Jobs
 

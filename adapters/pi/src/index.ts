@@ -3,7 +3,7 @@ import { Type } from "typebox";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { LifecycleController, environmentKey, type MessageLike } from "./controller.js";
+import { LifecycleController, environmentKey, type MessageLike, type ProviderConfiguration } from "./controller.js";
 import { PmaClient } from "./client.js";
 
 export const adapterPackageName = "@pma/pi-adapter";
@@ -13,7 +13,7 @@ export default function pmaExtension(pi: ExtensionAPI): void {
   const localCore = defaultCorePath(process.cwd());
   const executable = process.env.PMA_CORE_PATH ?? (existsSync(localCore) ? localCore : "pma-core");
   const client = new PmaClient(executable);
-  const controller = new LifecycleController(client);
+  const controller = new LifecycleController(client, providerConfiguration());
 
   pi.on("session_start", async (_event, ctx) => {
     let repository: string | undefined;
@@ -176,6 +176,23 @@ async function notifyRequest(client: PmaClient, ctx: { ui: { notify(message: str
 function textResult(value: unknown): { content: Array<{ type: "text"; text: string }>; details: unknown } {
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   return { content: [{ type: "text", text }], details: value };
+}
+
+function providerConfiguration(): ProviderConfiguration | undefined {
+  const command = process.env.PMA_PROVIDER_COMMAND;
+  const config = process.env.PMA_PROVIDER_CONFIG;
+  if (!command && !config) return undefined;
+  if (!command || !config) {
+    throw new Error("PMA_PROVIDER_COMMAND and PMA_PROVIDER_CONFIG must be set together");
+  }
+  const parsedCommand = JSON.parse(command) as unknown;
+  const parsedConfig = JSON.parse(config) as unknown;
+  if (!Array.isArray(parsedCommand) || !parsedCommand.every(value => typeof value === "string") ||
+      parsedCommand.length === 0 || typeof parsedConfig !== "object" || parsedConfig === null ||
+      Array.isArray(parsedConfig)) {
+    throw new Error("invalid PMA provider configuration");
+  }
+  return { command: parsedCommand, config: parsedConfig as Record<string, unknown> };
 }
 
 export function defaultCorePath(cwd: string): string {

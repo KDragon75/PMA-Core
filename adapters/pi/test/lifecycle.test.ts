@@ -44,6 +44,7 @@ test("automatic lifecycle recalls once, injects once, and learns only after sett
   await controller.agentSettled();
   assert.equal(client.calls.some(call => call.method === "pma.interaction.complete"), true);
   assert.equal(client.calls.some(call => call.method === "pma.learning.process_interaction"), true);
+  assert.equal(client.calls.filter(call => call.method === "pma.vectors.sync").length, 2);
   assert.equal(controller.currentSlice, "");
 });
 

@@ -11,6 +11,11 @@
 namespace {
 using Json = nlohmann::json;
 
+struct TempCleanup {
+  std::filesystem::path path;
+  ~TempCleanup() { std::error_code ignored; std::filesystem::remove_all(path, ignored); }
+};
+
 Json send(pma::service::Dispatcher &dispatcher, const Json &request) {
   const auto response = dispatcher.handle_line(request.dump());
   REQUIRE(response.has_value());
@@ -54,6 +59,40 @@ TEST_CASE("initialization negotiates protocol and system methods", "[protocol]")
   const auto capabilities =
       send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 4}, {"method", "pma.get_capabilities"}});
   REQUIRE(capabilities["result"]["transport"] == "stdio-ndjson");
+}
+
+TEST_CASE("configured provider processes settled learning and activates vectors", "[protocol][vectors]") {
+  const auto root = std::filesystem::temp_directory_path() /
+                    ("pma-service-vectors-" + std::to_string(
+                        std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::create_directories(root);
+  TempCleanup cleanup{root};
+  pma::service::Dispatcher dispatcher;
+  const Json provider = {
+      {"command", Json::array({PMA_NODE_EXECUTABLE, PMA_FAKE_PROVIDER_PATH})},
+      {"config", {{"kind", "openai-compatible"}, {"model", "fake"}, {"dimensions", 3}}}};
+  auto initialized = send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 100},
+      {"method", "pma.initialize"}, {"params", {
+        {"protocol_version", {{"min", 1}, {"max", 1}}},
+        {"database_path", (root / "pma.sqlite").string()}, {"bundle_root", root.string()},
+        {"provider", provider}}}});
+  REQUIRE(initialized["result"]["provider_availability"][0] == "ready");
+  (void)send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 101}, {"method", "pma.interaction.begin"},
+      {"params", {{"interaction_id", "i1"}, {"session_id", "s1"}, {"prompt", "remember preference"}}}});
+  (void)send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 102}, {"method", "pma.observe.event"},
+      {"params", {{"interaction_id", "i1"}, {"source_id", "e1"}, {"text", "I prefer durable vector recall."}}}});
+  (void)send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 103}, {"method", "pma.interaction.complete"},
+      {"params", {{"interaction_id", "i1"}}}});
+  const auto learned = send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 104},
+      {"method", "pma.learning.process_interaction"}, {"params", {{"interaction_id", "i1"}}}});
+  REQUIRE(learned["result"]["processed"] == true);
+  const auto synchronized = send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 105},
+      {"method", "pma.vectors.sync"}, {"params", Json::object()}});
+  REQUIRE(synchronized["result"]["synchronized"] == true);
+  REQUIRE(synchronized["result"]["vector_count"] == 1);
+  REQUIRE(std::filesystem::exists(root / "vectors"));
+  const auto status = send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 106}, {"method", "pma.get_status"}});
+  REQUIRE(status["result"]["vector_store"]["status"] == "active");
 }
 
 TEST_CASE("notifications and cancellation do not produce responses", "[protocol]") {

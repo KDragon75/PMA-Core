@@ -221,6 +221,13 @@ Manager::Manager(Database &core, std::filesystem::path bundle_root)
 
 void Manager::initialize(std::string_view build_version) {
   storage::migrate(*core_, migrations, build_version);
+  auto documents = core_->prepare("SELECT id,text FROM embedding_documents WHERE content_hash='' ");
+  while (documents.step()) {
+    auto update = core_->prepare("UPDATE embedding_documents SET content_hash=?2 WHERE id=?1");
+    update.bind(1, documents.column_text(0));
+    update.bind(2, storage::sha256(documents.column_text(1)));
+    update.execute();
+  }
   std::filesystem::create_directories(bundle_root_ / "vectors");
 }
 
@@ -239,7 +246,7 @@ void Manager::register_profile(const Profile &profile, const RuntimeManifest &ru
   manifest.bind(9, runtime.deterministic_settings);
   manifest.execute();
   auto insert = core_->prepare(
-      "INSERT INTO embedding_profiles VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)");
+      "INSERT OR IGNORE INTO embedding_profiles VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)");
   bind_profile(insert, profile, profile.fingerprint(), runtime.id);
   insert.execute();
   transaction.commit();
