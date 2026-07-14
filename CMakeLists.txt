@@ -76,7 +76,9 @@ target_link_libraries(pma_provider_process PUBLIC pma_project_options)
 find_package(nlohmann_json CONFIG REQUIRED)
 add_library(pma_service STATIC src/application/service.cpp src/transport/stdio.cpp)
 target_include_directories(pma_service PUBLIC include)
-target_link_libraries(pma_service PUBLIC pma_project_options PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(
+  pma_service PUBLIC pma_project_options PRIVATE pma_retrieval nlohmann_json::nlohmann_json
+)
 
 add_executable(pma-core src/main/main.cpp)
 target_link_libraries(pma-core PRIVATE pma_project_options pma_storage pma_service)

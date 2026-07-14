@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -90,6 +91,58 @@ TEST_CASE("protocol mismatch is reported without internal details", "[protocol]"
   REQUIRE(response["error"]["data"]["code"] == "PMA_PROTOCOL_VERSION_MISMATCH");
   REQUIRE(response["error"]["data"]["category"] == "validation");
   REQUIRE_FALSE(response["error"]["data"]["retryable"].get<bool>());
+}
+
+TEST_CASE("Pi lifecycle methods persist evidence and provide provider-free recall", "[protocol]") {
+  const auto root = std::filesystem::temp_directory_path() /
+                    ("pma-service-pi-" + std::to_string(
+                        std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::create_directories(root);
+  {
+    pma::service::Dispatcher dispatcher;
+    const auto initialized = send(
+        dispatcher,
+        {{"jsonrpc", "2.0"}, {"id", 1}, {"method", "pma.initialize"},
+         {"params", {{"protocol_version", {{"min", 1}, {"max", 1}}},
+                     {"database_path", (root / "pma.sqlite").string()},
+                     {"bundle_root", root.string()}}}});
+    REQUIRE(initialized.contains("result"));
+    REQUIRE(send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 2},
+                              {"method", "pma.interaction.begin"},
+                              {"params", {{"interaction_id", "pi:i1"},
+                                          {"session_id", "pi:s1"}, {"prompt", "remember"}}}})
+                ["result"]["accepted"]);
+    REQUIRE(send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 3},
+                              {"method", "pma.observe.event"},
+                              {"params", {{"interaction_id", "pi:i1"},
+                                          {"source_id", "pi:event:1"}, {"ordinal", 0},
+                                          {"text", "durable source evidence"},
+                                          {"idempotency_key", "pi:event:1"}}}})
+                ["result"]["accepted"]);
+    REQUIRE(send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 4},
+                              {"method", "pma.interaction.complete"},
+                              {"params", {{"interaction_id", "pi:i1"}}}})
+                ["result"]["accepted"]);
+    const auto learned = send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 5},
+                                           {"method", "pma.learning.propose"},
+                                           {"params", {{"statement", "SQLite remains authoritative"},
+                                                       {"authority", "explicit_user"}}}});
+    REQUIRE(learned["result"]["status"] == "active");
+    const auto recall = send(dispatcher, {{"jsonrpc", "2.0"}, {"id", 6},
+                                          {"method", "pma.recall"},
+                                          {"params", {{"packet_id", "pi:packet:1"},
+                                                      {"interaction_id", "pi:i2"},
+                                                      {"query", "SQLite authoritative"}}}});
+    REQUIRE(recall["result"]["packet_id"] == "pi:packet:1");
+    REQUIRE(recall["result"]["selected_count"] == 1);
+    const auto corrected = send(
+        dispatcher, {{"jsonrpc", "2.0"}, {"id", 7},
+                     {"method", "pma.memory.propose_correction"},
+                     {"params", {{"target", learned["result"]["claim_id"]},
+                                 {"correction", "SQLite is authoritative structured storage"}}}});
+    REQUIRE(corrected["result"]["status"] == "active");
+  }
+  std::filesystem::remove_all(root);
 }
 
 TEST_CASE("shutdown changes dispatcher lifecycle", "[protocol]") {
