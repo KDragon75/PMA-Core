@@ -13,9 +13,10 @@ function baseRuntime(config: ProviderConfig, runtimeType: RuntimeDescription["ru
     providerVersion: "0.1.0",
     runtimeType,
     nodeVersion: process.version,
-    transformersVersion: runtimeType === "transformers-js" ? "4.2.0" : null,
+    transformersVersion: runtimeType === "transformers-js" || runtimeType === "hybrid" ? "4.2.0" : null,
     os: os.platform(), architecture: os.arch(), device: config.device ?? "cpu",
-    backend: runtimeType === "transformers-js" ? "onnxruntime" : "remote-http",
+    backend: runtimeType === "transformers-js" ? "onnxruntime" :
+      runtimeType === "hybrid" ? "onnxruntime+remote-http" : "remote-http",
     model: { id: config.model, revision: config.revision ?? "main", artifactHash, tokenizerHash },
     embedding: {
       dimensions: config.dimensions, dataType: "float32", pooling: config.pooling ?? "mean",
@@ -25,7 +26,8 @@ function baseRuntime(config: ProviderConfig, runtimeType: RuntimeDescription["ru
     },
     lockfileHash,
     optionsHash: hashOptions({ dtype: config.dtype ?? "fp32", localOnly: config.localOnly ?? false,
-      baseUrl: config.baseUrl ?? null, generationModel: config.generationModel ?? config.model })
+      baseUrl: config.baseUrl ?? null, generationBaseUrl: config.generationBaseUrl ?? null,
+      generationModel: config.generationModel ?? config.model })
   }));
 }
 
@@ -106,6 +108,10 @@ export class TransformersAdapter implements ProviderAdapter {
   }
 }
 
+function openAiEndpoint(baseUrl: string, pathName: string): string {
+  return `${baseUrl.replace(/\/$/, "").replace(/\/v1$/, "")}/v1/${pathName}`;
+}
+
 export class OpenAIAdapter implements ProviderAdapter {
   constructor(private readonly config: ProviderConfig, private readonly fetchImpl: typeof fetch = fetch) {
     if (!config.baseUrl) throw new Error("baseUrl is required");
@@ -119,7 +125,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     return { "content-type": "application/json", ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}) };
   }
   async embedDocuments(texts: string[], signal: AbortSignal): Promise<number[][]> {
-    const response = await this.fetchImpl(`${this.config.baseUrl}/v1/embeddings`, {
+    const response = await this.fetchImpl(openAiEndpoint(this.config.baseUrl!, "embeddings"), {
       method: "POST", headers: this.headers(), signal,
       body: JSON.stringify({ model: this.config.model, input: texts, dimensions: this.config.dimensions })
     });
@@ -131,7 +137,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     return (await this.embedDocuments([text], signal))[0] ?? [];
   }
   async generate(prompt: string, signal: AbortSignal): Promise<string> {
-    const response = await this.fetchImpl(`${this.config.baseUrl}/v1/chat/completions`, {
+    const response = await this.fetchImpl(openAiEndpoint(this.config.baseUrl!, "chat/completions"), {
       method: "POST", headers: this.headers(), signal,
       body: JSON.stringify({ model: this.config.generationModel ?? this.config.model,
         messages: [{ role: "user", content: prompt }], temperature: 0 })
@@ -142,6 +148,39 @@ export class OpenAIAdapter implements ProviderAdapter {
   }
 }
 
+export class HybridAdapter implements ProviderAdapter {
+  private readonly embeddings: TransformersAdapter;
+  private readonly generation: OpenAIAdapter;
+
+  constructor(private readonly config: ProviderConfig, fetchImpl: typeof fetch = fetch) {
+    if (!config.generationBaseUrl) throw new Error("generationBaseUrl is required for hybrid provider");
+    this.embeddings = new TransformersAdapter(config);
+    this.generation = new OpenAIAdapter({ ...config, kind: "openai-compatible",
+      baseUrl: config.generationBaseUrl,
+      ...(config.generationApiKey ? { apiKey: config.generationApiKey } : {}),
+      model: config.generationModel ?? config.model }, fetchImpl);
+  }
+
+  async describeRuntime(): Promise<RuntimeDescription> {
+    const runtime = await this.embeddings.describeRuntime();
+    return { ...runtime, runtimeType: "hybrid", backend: "onnxruntime+remote-http",
+      optionsHash: hashOptions({ embeddingOptionsHash: runtime.optionsHash,
+        generationBaseUrl: this.config.generationBaseUrl,
+        generationModel: this.config.generationModel }) };
+  }
+  embedDocuments(texts: string[], signal: AbortSignal): Promise<number[][]> {
+    return this.embeddings.embedDocuments(texts, signal);
+  }
+  embedQuery(text: string, signal: AbortSignal): Promise<number[]> {
+    return this.embeddings.embedQuery(text, signal);
+  }
+  generate(prompt: string, signal: AbortSignal): Promise<string> {
+    return this.generation.generate(prompt, signal);
+  }
+}
+
 export function createAdapter(config: ProviderConfig): ProviderAdapter {
-  return config.kind === "transformers-js" ? new TransformersAdapter(config) : new OpenAIAdapter(config);
+  if (config.kind === "transformers-js") return new TransformersAdapter(config);
+  if (config.kind === "hybrid") return new HybridAdapter(config);
+  return new OpenAIAdapter(config);
 }

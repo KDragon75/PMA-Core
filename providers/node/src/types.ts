@@ -3,7 +3,7 @@ export type JsonRpcId = string | number;
 export interface RuntimeDescription {
   providerPackage: string;
   providerVersion: string;
-  runtimeType: "transformers-js" | "openai-compatible";
+  runtimeType: "transformers-js" | "openai-compatible" | "hybrid";
   nodeVersion: string;
   transformersVersion: string | null;
   os: string;
@@ -31,7 +31,7 @@ export interface RuntimeDescription {
 }
 
 export interface ProviderConfig {
-  kind: "transformers-js" | "openai-compatible";
+  kind: "transformers-js" | "openai-compatible" | "hybrid";
   model: string;
   revision?: string;
   dimensions: number;
@@ -48,6 +48,8 @@ export interface ProviderConfig {
   localOnly?: boolean;
   baseUrl?: string;
   apiKey?: string;
+  generationBaseUrl?: string;
+  generationApiKey?: string;
   generationModel?: string;
   artifactRoot?: string;
 }

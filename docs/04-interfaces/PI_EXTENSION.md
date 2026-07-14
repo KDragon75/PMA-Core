@@ -100,7 +100,13 @@ PMA_PROVIDER_COMMAND=["node","/absolute/path/to/provider/dist/src/cli.js"]
 PMA_PROVIDER_CONFIG={"kind":"transformers-js","model":"onnx-community/Qwen3-Embedding-0.6B-ONNX","dimensions":1024,"pooling":"last_token","normalize":true,"queryPrefix":"Instruct: Retrieve relevant persistent-memory knowledge for the query.\nQuery: ","documentPrefix":"","maxTokens":32768,"localModelPath":"/absolute/path/to/embedding-model","generationModel":"/absolute/path/to/structured-generation-model"}
 ```
 
-The values are JSON, including on Windows. `PMA_PROVIDER_COMMAND` is an argument array so paths with spaces remain unambiguous. Secrets in remote configurations use symbolic `env:VARIABLE_NAME` references. Without configuration, evidence capture and FTS/graph recall continue while provider learning and vectors report `not_configured`.
+A hybrid configuration keeps embeddings local while sending structured generation to an OpenAI-compatible endpoint:
+
+```text
+PMA_PROVIDER_CONFIG={"kind":"hybrid","model":"onnx-community/Qwen3-Embedding-0.6B-ONNX","dimensions":1024,"pooling":"last_token","normalize":true,"localModelPath":"/absolute/path/to/embedding-model","localOnly":true,"dtype":"q4","generationBaseUrl":"http://host:8080/v1","generationModel":"served-model-id"}
+```
+
+The values are JSON, including on Windows. `PMA_PROVIDER_COMMAND` is an argument array so paths with spaces remain unambiguous. A trailing `/v1` on remote base URLs is accepted. Secrets in remote configurations use symbolic `env:VARIABLE_NAME` references through `generationApiKey` for hybrid mode. Without configuration, evidence capture and FTS/graph recall continue while provider learning and vectors report `not_configured`.
 
 At session startup, the extension asks PMA to resume queued learning and stale vector work. After each settled interaction it processes the interaction and synchronizes vectors. Response-model changes never alter this provider configuration.
 

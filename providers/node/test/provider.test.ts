@@ -38,7 +38,7 @@ test("OpenAI adapter uses embeddings and chat completion endpoints", async () =>
   await once(server, "listening");
   const address = server.address();
   assert.ok(address && typeof address === "object");
-  const adapter = new OpenAIAdapter({ ...remoteConfig, baseUrl: `http://127.0.0.1:${address.port}` });
+  const adapter = new OpenAIAdapter({ ...remoteConfig, baseUrl: `http://127.0.0.1:${address.port}/v1/` });
   const signal = new AbortController().signal;
   assert.deepEqual(await adapter.embedQuery("query", signal), [1, 0, 0]);
   assert.equal(await adapter.generate("prompt", signal), "{\"ok\":true}");
